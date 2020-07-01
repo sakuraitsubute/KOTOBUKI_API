@@ -1,3 +1,8 @@
+/*
+棚卸し画面からQRコードを読み取ってPOSTしたあとで動くスクリプト
+他のと同じく、最終的にはsuccessかfailを返す
+*/
+
 <?php
 header("Content-Type: application/json; charset=UTF-8");
 
@@ -17,6 +22,8 @@ $fm->setProperty('hostspec', 'http://192.168.0.73');
 $fm->setProperty('username', $userid);
 $fm->setProperty('password', $password);
 
+
+//POSTされてきた値をエスケープして変数に格納
 $case = htmlspecialchars($_POST['case_amount']);
 $qr = htmlspecialchars($_POST['qr01']);
 //$tant = htmlspecialchars($_POST['tant']);
@@ -25,17 +32,20 @@ $extra = htmlspecialchars($_POST['extra']);
 $tana = htmlspecialchars($_POST['tana']);
 $order = htmlspecialchars($_POST['order']);
 
+//そのままだとただのstringな$qrを配列にする
 $qr_explode = explode(' ', $qr);
 $seiri = $qr_explode[0];
 $eda = $qr_explode[1];
 
-
+//整理番号が数字でなかったらなにか変なものが入ったとする
 if(!is_numeric($seiri)){
   $check = array('fail' => '値が不適切です');
   $fail = json_encode($check);
   echo $fail;
   exit;
   
+  
+  //ケース数が空欄だとココに入る
 }else if(!isset($case) or $case === 0){
   $empty = array('fail' => 'ケース数を入力してください');
   $fail = json_encode($empty);
@@ -47,6 +57,7 @@ if(!is_numeric($seiri)){
 if(!empty($_POST['qr01'])){
   $findrequest = array();
 
+  //まず検索
   $findrequest[0] = $fm->newFindRequest('棚卸し手入力');
  $findrequest[0]->addFindCriterion('整理番号', $seiri);
  $findrequest[0]->addFindCriterion('受注番号', $order);
@@ -68,11 +79,15 @@ if(!empty($_POST['qr01'])){
  $compoundfind->add(3, $findrequest[2]);
 
  $resultfind = $compoundfind->execute();
+  
+  //ここで401以外のエラーがあったらfailを吐いてスクリプトを終了する
 if(FileMaker::isError($resultfind) && $resultfind->getCode() <> "401"){
   $FMerror = array('fail' => 'findエラーコード:'.$resultfind->getCode().$resultfind->getMessage());
   $fail = json_encode($FMerror);
   echo $fail;
   die;
+  
+  //エラーコードが401だったら新しいレコードを作る
 }else if(FileMaker::isError($resultfind) && $resultfind->getCode() == "401"){
   
   $newCommand = $fm->newAddCommand('棚卸し手入力');
@@ -87,6 +102,7 @@ if(FileMaker::isError($resultfind) && $resultfind->getCode() <> "401"){
   //$newCommand->setScript('入庫情報入力');
   $result = $newCommand->execute();
 
+  //あんまりないと思うけど、newCommandでエラーが起きたらここに入る
   if(FileMaker::isError($result)){
   $FMerror = array('fail' => 'newエラーコード:'.$result->getCode().$result->getMessage());
   $fail = json_encode($FMerror);
@@ -97,6 +113,9 @@ if(FileMaker::isError($resultfind) && $resultfind->getCode() <> "401"){
   echo $success;
   }
 }else{
+  
+  //検索で該当するレコードがあった場合の処理
+  
   $record = $resultfind->getFirstRecord();
   $recordid = $record->getField('c_レコードID');
   $record_case_amount = $record->getField('ケース数');
@@ -116,7 +135,7 @@ if(FileMaker::isError($resultfind) && $resultfind->getCode() <> "401"){
 
 
   
-
+//QRコードが空欄のまま送信された場合の処理
 }else{
   $error = array('fail'=>'QRコードを読み込んでから送信ボタンを押してください');
   $fail = json_encode($error);
